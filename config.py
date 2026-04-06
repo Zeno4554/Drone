@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     )
 
     # Supabase configuration
-    SUPABASE_MODE: bool = os.getenv("SUPABASE_MODE", "false").lower() == "true"
+    SUPABASE_MODE: bool = True
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "5"))
 
     # CORS
