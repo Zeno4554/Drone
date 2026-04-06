@@ -34,8 +34,8 @@ st.sidebar.title("🚁 AeroCorridor")
 st.sidebar.write("3D Drone Delivery Navigation System")
 
 # Get API URL from secrets
-api_url = st.secrets.get("API_URL", "http://localhost:8000")
-
+# api_url = st.secrets.get("API_URL", "http://localhost:8000")
+api_url = os.getenv("API_URL")
 st.sidebar.divider()
 st.sidebar.write("**System Status**")
 
