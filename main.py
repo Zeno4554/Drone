@@ -1,13 +1,16 @@
 """Main FastAPI application."""
 
+import os
+import sys
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
 
-from .config import settings
-from .database import init_db
-from .routers import buildings, delivery_nodes, orders, routes, map, telemetry
+from config import settings
+from backend.app.database import init_db
+from backend.app.routers import buildings, delivery_nodes, orders, routes, map, telemetry
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,8 +45,7 @@ app.include_router(telemetry.router, prefix=settings.API_V1_PREFIX)
 async def startup_event():
     """Initialize database on startup."""
     logger.info("🚀 Starting AeroCorridor Backend")
-    
-    # Detect database mode
+
     is_supabase = settings.SUPABASE_MODE or "supabase.co" in settings.DATABASE_URL
     if is_supabase:
         db_mode = "🔒 Supabase (Managed PostgreSQL + PostGIS)"
@@ -51,12 +53,12 @@ async def startup_event():
     else:
         db_mode = "📡 Local PostgreSQL"
         pool_info = f"Connection pool: {settings.DB_POOL_SIZE}"
-    
+
     logger.info(f"Database Mode: {db_mode}")
     logger.info(f"Database URL: {settings.DATABASE_URL[:50]}...")
     logger.info(pool_info)
     logger.info(f"API Endpoint: {settings.API_V1_PREFIX}")
-    
+
     try:
         init_db()
         logger.info("✅ Database connected and initialized successfully")
@@ -117,4 +119,28 @@ async def generic_exception_handler(request, exc):
             "error": "Internal server error",
             "detail": str(exc),
         },
+    )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    print(f"""
+
+    🚀 AeroCorridor Backend - v{settings.VERSION}
+    {"="*50}
+
+    Database: {settings.DATABASE_URL}
+    API URL: http://localhost:8000{settings.API_V1_PREFIX}
+    Docs: http://localhost:8000/docs
+
+    {"="*50}
+    """)
+
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True,
+        workers=1,
     )
