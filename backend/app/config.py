@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Simulation
     ENABLE_TELEMETRY_SIMULATION: bool = True
     
+    # Auto-bootstrap demo data on startup when DB is empty
+    AUTO_BOOTSTRAP: bool = os.getenv("AUTO_BOOTSTRAP", "true").lower() == "true"
+    
     class Config:
         env_file = ".env"
         case_sensitive = True

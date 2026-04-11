@@ -1,5 +1,6 @@
 """Frontend components - Map rendering utilities."""
 
+import json
 import folium
 from folium import plugins
 from typing import List, Dict, Optional
@@ -7,11 +8,12 @@ import streamlit as st
 
 
 def create_base_map(center_lat: float = 13.0, center_lon: float = 77.6, zoom: int = 12) -> folium.Map:
-    """Create a base folium map centered on Bengaluru."""
+    """Create a base folium map centered on Bengaluru with scroll-wheel zoom."""
     map_obj = folium.Map(
         location=[center_lat, center_lon],
         zoom_start=zoom,
-        tiles="OpenStreetMap"
+        tiles="OpenStreetMap",
+        scrollWheelZoom=True,
     )
     return map_obj
 
@@ -27,7 +29,6 @@ def add_buildings_to_map(map_obj: folium.Map, buildings_geojson: Dict, selected_
         lat, lon = coords[1], coords[0]
         
         color = "blue" if props["building_id"] != selected_building_id else "red"
-        icon_char = "🏢"
         
         popup_text = f"""
         <b>{props['name']}</b><br>
@@ -112,24 +113,62 @@ def add_risk_zones_to_map(map_obj: folium.Map, risk_geojson: Dict):
         ).add_to(map_obj)
 
 
-def add_route_to_map(map_obj: folium.Map, waypoints: List[Dict]):
-    """Add planned route as polyline to map."""
+def add_orders_to_map(map_obj: folium.Map, orders_geojson: Dict):
+    """Add active orders to map with status-colored markers."""
+    if not orders_geojson or "features" not in orders_geojson:
+        return
+
+    status_colors = {
+        "placed": "lightblue",
+        "assigned": "orange",
+        "in-transit": "purple",
+    }
+
+    for feature in orders_geojson["features"]:
+        props = feature["properties"]
+        coords = feature["geometry"]["coordinates"]
+        lat, lon = coords[1], coords[0]
+
+        color = status_colors.get(props["status"], "gray")
+
+        popup_text = f"""
+        <b>Order {props['order_id']}</b><br>
+        Status: {props['status']}<br>
+        Payload: {props['payload_weight_kg']:.1f} kg<br>
+        Drone: {props.get('assigned_drone_id') or 'unassigned'}
+        """
+
+        folium.Marker(
+            location=[lat, lon],
+            popup=folium.Popup(popup_text, max_width=250),
+            tooltip=f"Order {props['order_id'][:16]}",
+            icon=folium.Icon(color=color, icon="shopping-cart", prefix="fa"),
+        ).add_to(map_obj)
+
+        # Draw route polyline if the order carries route data
+        route_raw = props.get("route_json")
+        if route_raw:
+            try:
+                waypoints = json.loads(route_raw) if isinstance(route_raw, str) else route_raw
+                _add_ant_path(map_obj, waypoints, color="#7c3aed")
+            except Exception:
+                pass
+
+
+def add_route_to_map(map_obj: folium.Map, waypoints: List[Dict], use_ant_path: bool = True):
+    """Add planned route as an animated AntPath (or plain polyline) to map."""
     if not waypoints or len(waypoints) < 2:
         return
     
-    # Extract coordinates
     coords = [(wp["latitude"], wp["longitude"]) for wp in waypoints]
+
+    if use_ant_path:
+        _add_ant_path(map_obj, waypoints, color="#7c3aed")
+    else:
+        folium.PolyLine(
+            coords, color="purple", weight=3, opacity=0.8, popup="Planned Route",
+        ).add_to(map_obj)
     
-    # Add polyline
-    folium.PolyLine(
-        coords,
-        color="purple",
-        weight=3,
-        opacity=0.8,
-        popup="Planned Route",
-    ).add_to(map_obj)
-    
-    # Add start and end markers
     folium.Marker(
         location=coords[0],
         popup="Start",
@@ -142,17 +181,27 @@ def add_route_to_map(map_obj: folium.Map, waypoints: List[Dict]):
         icon=folium.Icon(color="red", icon="stop"),
     ).add_to(map_obj)
     
-    # Add waypoint markers
     for i, coord in enumerate(coords[1:-1], 1):
         folium.CircleMarker(
-            location=coord,
-            radius=5,
-            popup=f"Waypoint {i}",
-            color="purple",
-            fill=True,
-            fillColor="purple",
-            fillOpacity=0.7,
+            location=coord, radius=5, popup=f"Waypoint {i}",
+            color="purple", fill=True, fillColor="purple", fillOpacity=0.7,
         ).add_to(map_obj)
+
+
+def _add_ant_path(map_obj: folium.Map, waypoints: List[Dict], color: str = "#7c3aed"):
+    """Render an animated AntPath polyline for a list of waypoints."""
+    coords = [(wp["latitude"], wp["longitude"]) for wp in waypoints]
+    if len(coords) < 2:
+        return
+    plugins.AntPath(
+        locations=coords,
+        color=color,
+        weight=4,
+        opacity=0.7,
+        dash_array=[10, 20],
+        delay=1000,
+        popup="Route",
+    ).add_to(map_obj)
 
 
 def add_drone_position_to_map(map_obj: folium.Map, drone_data: Dict, is_active: bool = True):
@@ -178,16 +227,12 @@ def add_drone_position_to_map(map_obj: folium.Map, drone_data: Dict, is_active: 
         icon=folium.Icon(color=color, icon=icon_name, prefix="fa"),
     ).add_to(map_obj)
     
-    # Add velocity vector (if speed > 0)
     if drone_data["speed_ms"] > 0.5:
         heading = drone_data["heading_deg"]
-        # Simple vector arrow visualization
         end_lat = drone_data["latitude"] + 0.001 * (heading / 360)
         end_lon = drone_data["longitude"] + 0.001 * ((heading - 90) / 360)
         
         folium.PolyLine(
             [[drone_data["latitude"], drone_data["longitude"]], [end_lat, end_lon]],
-            color="green",
-            weight=2,
-            opacity=0.6,
+            color="green", weight=2, opacity=0.6,
         ).add_to(map_obj)

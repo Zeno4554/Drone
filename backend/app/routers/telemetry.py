@@ -15,7 +15,7 @@ from pydantic import BaseModel
 router = APIRouter(prefix="/telemetry", tags=["telemetry"])
 
 # Global telemetry simulator instance
-telemetry_simulator = TelemetrySimulator(num_drones=3)
+telemetry_simulator = TelemetrySimulator(num_drones=5)
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -137,27 +137,22 @@ async def land_drone(drone_id: str):
 @router.websocket("/ws")
 async def websocket_telemetry_stream(websocket: WebSocket):
     """WebSocket endpoint for real-time telemetry streaming.
-    
-    Broadcasts current telemetry for all drones every 500ms.
+
+    Each client receives its own 500 ms push loop (no redundant broadcast storm).
     """
     await manager.connect(websocket)
     try:
         while True:
-            # Get current telemetry for all drones
             telemetry_list = telemetry_simulator.get_telemetry_all_drones()
-            
-            # Broadcast to all connected clients
-            await manager.broadcast({
+            await websocket.send_json({
                 "type": "telemetry_update",
                 "timestamp": datetime.utcnow().isoformat(),
                 "drones": telemetry_list,
             })
-            
-            # Update interval (500ms)
             await asyncio.sleep(0.5)
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-    except Exception as e:
+    except Exception:
         manager.disconnect(websocket)
 
 

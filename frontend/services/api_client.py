@@ -194,3 +194,67 @@ class APIClient:
             return resp.status_code == 200
         except Exception:
             return False
+    
+    # Drone assignment
+    def assign_drone(self, order_id: str) -> Optional[Dict]:
+        """Auto-assign best available drone to an order."""
+        try:
+            resp = self.session.post(f"{self.api_v1}/orders/{order_id}/assign-drone")
+            return resp.json() if resp.status_code == 200 else None
+        except Exception as e:
+            st.error(f"Failed to assign drone: {e}")
+            return None
+
+    def assign_route_to_order(self, order_id: str, waypoints: list, distance_m: float, duration_s: float) -> Optional[Dict]:
+        """Attach a planned route to an order."""
+        try:
+            resp = self.session.post(
+                f"{self.api_v1}/orders/{order_id}/assign-route",
+                json=waypoints,
+                params={"distance_m": distance_m, "duration_s": duration_s},
+            )
+            return resp.json() if resp.status_code == 200 else None
+        except Exception as e:
+            st.error(f"Failed to assign route: {e}")
+            return None
+
+    def release_drone(self, order_id: str) -> bool:
+        """Release a drone from a completed/cancelled order."""
+        try:
+            resp = self.session.post(f"{self.api_v1}/orders/{order_id}/release-drone")
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    # Map GeoJSON helpers
+    def get_orders_geojson(self, status: str = None) -> Optional[Dict]:
+        """Get active orders as GeoJSON."""
+        try:
+            params = {"status": status} if status else {}
+            resp = self.session.get(f"{self.api_v1}/map/orders/geojson", params=params)
+            return resp.json() if resp.status_code == 200 else None
+        except Exception:
+            return None
+
+    # Bootstrap / setup
+    def bootstrap(self) -> Optional[Dict]:
+        """Trigger demo data bootstrap on the backend."""
+        try:
+            resp = self.session.post(f"{self.api_v1}/setup/bootstrap")
+            return resp.json() if resp.status_code == 200 else None
+        except Exception:
+            return None
+
+    def get_setup_status(self) -> Optional[Dict]:
+        """Get DB row counts."""
+        try:
+            resp = self.session.get(f"{self.api_v1}/setup/status")
+            return resp.json() if resp.status_code == 200 else None
+        except Exception:
+            return None
+
+    @property
+    def telemetry_ws_url(self) -> str:
+        """WebSocket URL for the telemetry stream."""
+        ws = self.base_url.replace("http://", "ws://").replace("https://", "wss://")
+        return f"{ws}/api/v1/telemetry/ws"

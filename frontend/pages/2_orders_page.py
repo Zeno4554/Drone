@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from services.api_client import APIClient
+from frontend.services.api_client import APIClient
 
 
 def show(api_url: str):
@@ -21,7 +21,6 @@ def show(api_url: str):
         col1, col2 = st.columns(2)
         
         with col1:
-            # Select destination
             buildings = api.get_buildings()
             if not buildings:
                 st.error("Failed to load buildings. Is the backend running?")
@@ -35,7 +34,6 @@ def show(api_url: str):
             )
             selected_building = building_options[selected_building_name]
             
-            # Get nodes for building
             nodes = api.get_delivery_nodes(selected_building["building_id"])
             selected_node = None
             if nodes:
@@ -50,13 +48,9 @@ def show(api_url: str):
                 st.error("No delivery nodes available")
         
         with col2:
-            # Payload details
             payload_weight = st.slider(
                 "📦 Payload Weight (kg)",
-                min_value=0.1,
-                max_value=2.5,
-                value=1.0,
-                step=0.1
+                min_value=0.1, max_value=2.5, value=1.0, step=0.1
             )
             
             payload_desc = st.text_area(
@@ -65,7 +59,6 @@ def show(api_url: str):
                 height=80
             )
         
-        # Place order button
         col_a, col_b, col_c = st.columns([1, 1, 1])
         with col_b:
             if st.button("📤 Place Order", key="place_order_btn"):
@@ -73,26 +66,31 @@ def show(api_url: str):
                     if payload_weight > selected_node["max_payload_kg"]:
                         st.error(f"Payload exceeds node capacity ({selected_node['max_payload_kg']}kg)")
                     else:
-                        # Place order
                         order = api.place_order(selected_node["node_id"], payload_weight, payload_desc)
                         if order and "order_id" in order:
-                            st.success(f"✅ Order placed: {order['order_id']}")
-                            st.session_state.last_order_id = order["order_id"]
+                            st.success(f"Order placed: {order['order_id']}")
                             
                             # Plan route
-                            route = api.plan_route(
-                                12.9716,  # Default source lat
-                                77.5946,  # Default source lon
-                                980.0,    # Default source alt MSL
-                                selected_node["node_id"]
-                            )
+                            route = api.plan_route(12.9716, 77.5946, 980.0, selected_node["node_id"])
                             if route and "waypoints" in route:
-                                st.info(f"""
-                                ✅ Route planned:
-                                - Distance: {route['total_distance_m']:.0f}m
-                                - Est. Duration: {route['estimated_duration_s']:.0f}s
-                                - Risk Score: {route['risk_score']:.2f}
-                                """)
+                                st.info(
+                                    f"Route planned — {route['total_distance_m']:.0f} m, "
+                                    f"~{route['estimated_duration_s']:.0f} s, risk {route['risk_score']:.2f}"
+                                )
+                                # Attach route to order
+                                api.assign_route_to_order(
+                                    order["order_id"],
+                                    route["waypoints"],
+                                    route["total_distance_m"],
+                                    route["estimated_duration_s"],
+                                )
+                            
+                            # Auto-assign best drone
+                            assign = api.assign_drone(order["order_id"])
+                            if assign and assign.get("drone_id"):
+                                st.success(f"Drone assigned: **{assign['drone_id']}**")
+                            else:
+                                st.warning("No drone available right now — order queued")
                         else:
                             st.error("Failed to place order")
                 else:
@@ -102,11 +100,13 @@ def show(api_url: str):
     with tab2:
         st.subheader("Active Orders")
         
-        # Get in-progress orders
-        orders = api.get_orders(status="in-transit")
+        active_statuses = ["placed", "assigned", "in-transit"]
+        all_active = []
+        for s in active_statuses:
+            all_active.extend(api.get_orders(status=s))
         
-        if orders:
-            for order in orders:
+        if all_active:
+            for order in all_active:
                 with st.container(border=True):
                     col_info, col_action = st.columns([3, 1])
                     
@@ -115,13 +115,12 @@ def show(api_url: str):
                         st.write(f"**Destination:** {order['destination_node_id']}")
                         st.write(f"**Payload:** {order['payload_weight_kg']:.1f}kg")
                         st.write(f"**Status:** {order['status']}")
+                        if order.get("assigned_drone_id"):
+                            st.write(f"**Drone:** {order['assigned_drone_id']}")
                         st.write(f"**Created:** {order['created_at']}")
                         
                         if order.get("estimated_distance_m"):
-                            st.metric(
-                                "Est. Distance",
-                                f"{order['estimated_distance_m']:.0f}m"
-                            )
+                            st.metric("Est. Distance", f"{order['estimated_distance_m']:.0f}m")
                     
                     with col_action:
                         if st.button("📊 Track", key=f"track_{order['order_id']}"):
@@ -136,7 +135,6 @@ def show(api_url: str):
         orders = api.get_orders()
         
         if orders:
-            # Create DataFrame
             orders_data = []
             for order in orders:
                 orders_data.append({
@@ -144,6 +142,7 @@ def show(api_url: str):
                     "Node": order["destination_node_id"],
                     "Payload (kg)": order["payload_weight_kg"],
                     "Status": order["status"],
+                    "Drone": order.get("assigned_drone_id") or "—",
                     "Distance (m)": order.get("estimated_distance_m", "—"),
                     "Created": order["created_at"][:10],
                 })
@@ -151,16 +150,13 @@ def show(api_url: str):
             df = pd.DataFrame(orders_data)
             st.dataframe(df, use_container_width=True)
             
-            # Stats
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Total Orders", len(orders))
             with col2:
-                completed = len([o for o in orders if o["status"] == "delivered"])
-                st.metric("Delivered", completed)
+                st.metric("Delivered", len([o for o in orders if o["status"] == "delivered"]))
             with col3:
-                active = len([o for o in orders if o["status"] in ["placed", "assigned", "in-transit"]])
-                st.metric("Active", active)
+                st.metric("Active", len([o for o in orders if o["status"] in active_statuses]))
             with col4:
                 st.metric("Failed", len([o for o in orders if o["status"] == "failed"]))
         else:
