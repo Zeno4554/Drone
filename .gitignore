@@ -32,7 +32,7 @@ wheels/
 *.swo
 *~
 .DS_Store
-
+dron_env/
 # Environment
 .env
 .env.local
@@ -55,3 +55,5 @@ logs/
 .netlify/
 build/
 dist/
+trash/
+docs/

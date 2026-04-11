@@ -30,6 +30,8 @@ class DeliveryNodeCreate(BaseModel):
     node_id: str
     building_id: str
     node_name: str
+    latitude: float
+    longitude: float
     altitude_msl: float
     height_agl: float
     node_type: str = "rooftop"
@@ -74,7 +76,7 @@ async def create_node(data: DeliveryNodeCreate, db: Session = Depends(get_db)):
         node_type=data.node_type,
         marker_id=data.marker_id,
         max_payload_kg=data.max_payload_kg,
-        location=f"POINTZ(77.5946 12.9716 {data.altitude_msl})",
+        location=f"POINTZ({data.longitude} {data.latitude} {data.altitude_msl})",
     )
     db.add(node)
     db.commit()

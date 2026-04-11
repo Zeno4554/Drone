@@ -28,6 +28,8 @@ class BuildingCreate(BaseModel):
     building_id: str
     name: str
     city: str = "Bengaluru"
+    latitude: float
+    longitude: float
     ground_elev_msl: float
     height_m: float
 
@@ -51,9 +53,6 @@ async def get_building(building_id: str, db: Session = Depends(get_db)):
 @router.post("", response_model=BuildingResponse)
 async def create_building(data: BuildingCreate, db: Session = Depends(get_db)):
     """Create a new building."""
-    # Create geometric point (lon, lat for GeoJSON convention)
-    from geoalchemy2 import func as geom_func
-    
     building = Building(
         building_id=data.building_id,
         name=data.name,
@@ -61,7 +60,7 @@ async def create_building(data: BuildingCreate, db: Session = Depends(get_db)):
         ground_elev_msl=data.ground_elev_msl,
         height_m=data.height_m,
         top_elev_msl=data.ground_elev_msl + data.height_m,
-        location="POINT(77.5946 12.9716)",  # Default to Bangalore center
+        location=f"POINT({data.longitude} {data.latitude})",
     )
     db.add(building)
     db.commit()

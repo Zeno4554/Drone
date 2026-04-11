@@ -2,12 +2,14 @@
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List, Optional
 from ..database import get_db
 from ..models.building import Building
 from ..models.delivery_node import DeliveryNode
 from ..models.risk_voxel import RiskVoxel
 from ..models.obstacle import Obstacle
+from ..models.order import Order
 from ..services.risk_calculator import RiskCalculator
 
 router = APIRouter(prefix="/map", tags=["map"])
@@ -21,11 +23,13 @@ async def get_buildings_geojson(db: Session = Depends(get_db)):
     
     features = []
     for b in buildings:
+        lon = db.scalar(func.ST_X(b.location))
+        lat = db.scalar(func.ST_Y(b.location))
         feature = {
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [b.location.x, b.location.y],  # [lon, lat]
+                "coordinates": [lon, lat],  # [lon, lat]
             },
             "properties": {
                 "building_id": b.building_id,
@@ -50,11 +54,13 @@ async def get_delivery_nodes_geojson(db: Session = Depends(get_db)):
     
     features = []
     for node in nodes:
+        lon = db.scalar(func.ST_X(node.location))
+        lat = db.scalar(func.ST_Y(node.location))
         feature = {
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [node.location.x, node.location.y],
+                "coordinates": [lon, lat],
             },
             "properties": {
                 "node_id": node.node_id,
@@ -89,6 +95,9 @@ async def get_risk_zones_geojson(
     
     features = []
     for voxel in risk_voxels:
+        lon = db.scalar(func.ST_X(voxel.center))
+        lat = db.scalar(func.ST_Y(voxel.center))
+        alt = db.scalar(func.ST_Z(voxel.center))
         danger_colors = {
             "green": "#00ff00",
             "grey": "#808080",
@@ -101,14 +110,14 @@ async def get_risk_zones_geojson(
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [voxel.center.x, voxel.center.y],
+                "coordinates": [lon, lat],
             },
             "properties": {
                 "voxel_id": voxel.voxel_id,
                 "risk_score": voxel.composite_risk,
                 "zone_color": voxel.zone_color,
                 "danger_hex": danger_colors.get(voxel.zone_color, "#808080"),
-                "altitude_msl": voxel.center.z,
+                "altitude_msl": alt,
                 "success_rate": voxel.flight_success_rate,
             },
         }
@@ -120,6 +129,40 @@ async def get_risk_zones_geojson(
     }
 
 
+@router.get("/orders/geojson")
+async def get_orders_geojson(
+    db: Session = Depends(get_db),
+    status: Optional[str] = None,
+):
+    """Get active orders as GeoJSON, joined to their destination node coordinates."""
+    query = db.query(Order, DeliveryNode).join(
+        DeliveryNode, Order.destination_node_id == DeliveryNode.node_id
+    )
+    if status:
+        query = query.filter(Order.status == status)
+    else:
+        query = query.filter(Order.status.in_(["placed", "assigned", "in-transit"]))
+
+    features = []
+    for order, node in query.all():
+        lon = db.scalar(func.ST_X(node.location))
+        lat = db.scalar(func.ST_Y(node.location))
+        features.append({
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "properties": {
+                "order_id": order.order_id,
+                "status": order.status,
+                "payload_weight_kg": order.payload_weight_kg,
+                "assigned_drone_id": order.assigned_drone_id,
+                "destination_node_id": order.destination_node_id,
+                "route_json": order.route_json,
+            },
+        })
+
+    return {"type": "FeatureCollection", "features": features}
+
+
 @router.get("/obstacles/geojson")
 async def get_obstacles_geojson(db: Session = Depends(get_db)):
     """Get all obstacles as GeoJSON FeatureCollection."""
@@ -127,11 +170,13 @@ async def get_obstacles_geojson(db: Session = Depends(get_db)):
     
     features = []
     for obs in obstacles:
+        lon = db.scalar(func.ST_X(obs.base_location))
+        lat = db.scalar(func.ST_Y(obs.base_location))
         feature = {
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [obs.base_location.x, obs.base_location.y],
+                "coordinates": [lon, lat],
             },
             "properties": {
                 "obstacle_id": obs.obstacle_id,

@@ -7,7 +7,7 @@ import logging
 
 from .config import settings
 from .database import init_db
-from .routers import buildings, delivery_nodes, orders, routes, map, telemetry
+from .routers import buildings, delivery_nodes, orders, routes, map, telemetry, setup
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +36,7 @@ app.include_router(orders.router, prefix=settings.API_V1_PREFIX)
 app.include_router(routes.router, prefix=settings.API_V1_PREFIX)
 app.include_router(map.router, prefix=settings.API_V1_PREFIX)
 app.include_router(telemetry.router, prefix=settings.API_V1_PREFIX)
+app.include_router(setup.router, prefix=settings.API_V1_PREFIX)
 
 
 @app.on_event("startup")
@@ -62,6 +63,19 @@ async def startup_event():
         logger.info("✅ Database connected and initialized successfully")
         if is_supabase:
             logger.info("✨ PostGIS extensions available on Supabase")
+        
+        if settings.AUTO_BOOTSTRAP:
+            from .services.demo_bootstrap import ensure_demo_data
+            from .database import SessionLocal
+            db = SessionLocal()
+            try:
+                counts = ensure_demo_data(db)
+                if counts.get("skipped"):
+                    logger.info("⏭️ Demo data already present — skipped bootstrap")
+                else:
+                    logger.info(f"🌱 Demo data bootstrapped: {counts}")
+            finally:
+                db.close()
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
         raise
@@ -101,6 +115,7 @@ async def api_root():
             "map_data": "/api/v1/map",
             "telemetry": "/api/v1/telemetry",
         },
+        "setup": "/api/v1/setup",
         "websockets": {
             "telemetry_stream": "/api/v1/telemetry/ws",
         },
