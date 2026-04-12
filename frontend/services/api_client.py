@@ -258,3 +258,67 @@ class APIClient:
         """WebSocket URL for the telemetry stream."""
         ws = self.base_url.replace("http://", "ws://").replace("https://", "wss://")
         return f"{ws}/api/v1/telemetry/ws"
+
+    # ── Swarm Mission (obstacles + sensors + comms) ───────────────────────────
+
+    def start_swarm_mission(
+        self,
+        n_drones:       int,
+        start_points:   list,
+        end_points:     list,
+        speeds:         list,
+        active_sensors: dict,
+        total_time_s:   float = 120.0,
+        fps:            int   = 20,
+        obs_count:      int   = 10,
+        obs_radius_min: float = 5.0,
+        obs_radius_max: float = 30.0,
+        ref_lat:        float = None,
+        ref_lon:        float = None,
+        seed:           int   = 42,
+    ) -> Optional[Dict]:
+        """POST /api/v1/swarm/obstacles/start — returns {session_id, ...}."""
+        try:
+            payload = {
+                "n_drones":       n_drones,
+                "start_points":   start_points,
+                "end_points":     end_points,
+                "speeds":         speeds,
+                "active_sensors": active_sensors,
+                "total_time_s":   total_time_s,
+                "fps":            fps,
+                "obs_count":      obs_count,
+                "obs_radius_min": obs_radius_min,
+                "obs_radius_max": obs_radius_max,
+                "seed":           seed,
+            }
+            if ref_lat is not None:
+                payload["ref_lat"] = ref_lat
+            if ref_lon is not None:
+                payload["ref_lon"] = ref_lon
+            resp = self.session.post(f"{self.api_v1}/swarm/obstacles/start", json=payload)
+            return resp.json() if resp.status_code == 200 else None
+        except Exception as e:
+            st.error(f"Failed to start swarm mission: {e}")
+            return None
+
+    def reset_swarm_mission(self, session_id: str) -> bool:
+        """POST /api/v1/swarm/obstacles/{session_id}/reset."""
+        try:
+            resp = self.session.post(f"{self.api_v1}/swarm/obstacles/{session_id}/reset")
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    def delete_swarm_mission(self, session_id: str) -> bool:
+        """DELETE /api/v1/swarm/obstacles/{session_id}."""
+        try:
+            resp = self.session.delete(f"{self.api_v1}/swarm/obstacles/{session_id}")
+            return resp.status_code == 200
+        except Exception:
+            return False
+
+    def swarm_mission_ws_url(self, session_id: str) -> str:
+        """WebSocket URL for streaming a swarm obstacle mission."""
+        ws = self.base_url.replace("http://", "ws://").replace("https://", "wss://")
+        return f"{ws}/api/v1/swarm/obstacles/{session_id}/stream"

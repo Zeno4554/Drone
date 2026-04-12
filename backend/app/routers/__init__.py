@@ -1,5 +1,15 @@
 """Initialize routers for FastAPI app."""
 
-from . import buildings, delivery_nodes, orders, routes, map, telemetry, setup
+from . import buildings, delivery_nodes, map, orders, routes, setup, swarm_hybrid, swarm_obstacles, telemetry
 
-__all__ = ["buildings", "delivery_nodes", "orders", "routes", "map", "telemetry", "setup"]
+__all__ = [
+    "buildings",
+    "delivery_nodes",
+    "map",
+    "orders",
+    "routes",
+    "setup",
+    "swarm_hybrid",
+    "swarm_obstacles",
+    "telemetry",
+]

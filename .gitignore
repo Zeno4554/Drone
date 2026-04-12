@@ -59,3 +59,7 @@ trash/
 docs/
 drone/
 trash/
+swarm_comm_obstacle_simulation.py
+hybrid_swarm_live_animation.py
+drone_swarm_live_animation.py
+drone_simulation.py
