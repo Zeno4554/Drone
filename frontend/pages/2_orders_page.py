@@ -3,7 +3,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from frontend.services.api_client import APIClient
+from services.api_client import APIClient
 
 
 def show(api_url: str):
@@ -164,5 +164,5 @@ def show(api_url: str):
 
 
 # ---- Top-level execution for Streamlit multi-page ----
-api_url = st.secrets.get("API_URL", "http://localhost:8000")
+api_url = "http://localhost:8000"
 show(api_url)

@@ -33,8 +33,7 @@ st.markdown("""
 st.sidebar.title("🚁 AeroCorridor")
 st.sidebar.write("3D Drone Delivery Navigation System")
 
-# Get API URL from secrets
-api_url = st.secrets.get("API_URL", "http://localhost:8000")
+api_url = "http://localhost:8000"
 
 st.sidebar.divider()
 st.sidebar.write("**System Status**")

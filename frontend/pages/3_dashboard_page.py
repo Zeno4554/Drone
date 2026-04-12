@@ -4,12 +4,12 @@ import json
 import streamlit as st
 import pandas as pd
 import time
-from frontend.services.api_client import APIClient
-from frontend.components.map_renderer import (
+from services.api_client import APIClient
+from components.map_renderer import (
     create_base_map, add_buildings_to_map, add_delivery_nodes_to_map,
     add_drone_position_to_map, add_orders_to_map, add_route_to_map,
 )
-from frontend.components.live_map import render_live_map
+from components.live_map import render_live_map
 import streamlit_folium as stf
 
 
@@ -119,5 +119,5 @@ def show(api_url: str):
 
 
 # ---- Top-level execution for Streamlit multi-page ----
-api_url = st.secrets.get("API_URL", "http://localhost:8000")
+api_url = "http://localhost:8000"
 show(api_url)
