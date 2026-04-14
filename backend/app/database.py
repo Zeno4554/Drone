@@ -13,9 +13,9 @@ connect_args = {}
 if settings.SUPABASE_MODE or "supabase.co" in settings.DATABASE_URL:
     # Supabase requires SSL
     connect_args["sslmode"] = "require"
-    print("🔒 Using SSL connection (Supabase detected)")
+    print("[SSL] Using SSL connection (Supabase detected)")
 else:
-    print("📡 Using standard PostgreSQL connection")
+    print("[DB] Using standard PostgreSQL connection")
 
 # Create engine with connection pooling
 engine = create_engine(
@@ -44,10 +44,10 @@ def get_db() -> Session:
 def init_db():
     """Initialize database tables."""
     Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created successfully")
+    print("[OK] Database tables created successfully")
 
 
 def drop_all_tables():
     """Drop all tables (for testing/reset)."""
     Base.metadata.drop_all(bind=engine)
-    print("🗑️  All tables dropped")
+    print("[DEL] All tables dropped")

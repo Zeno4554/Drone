@@ -246,7 +246,18 @@ class SwarmObstacleSim:
 
     def _manage_obstacles(self) -> None:
         if self.rng.random() < self.spawn_prob and len(self.obstacles) < self.max_obs:
-            self.obstacles.append(self._random_obstacle())
+            # Try a few times to spawn an obstacle that isn't on top of a drone
+            for _ in range(5):
+                new_obs = self._random_obstacle()
+                safe = True
+                for drone in self.drones:
+                    if np.linalg.norm(new_obs.pos - drone.pos) < new_obs.radius + 15.0:
+                        safe = False
+                        break
+                if safe:
+                    self.obstacles.append(new_obs)
+                    break
+                    
         if self.rng.random() < self.despawn_prob and len(self.obstacles) > self.initial_obs:
             self.obstacles.pop(0)
 
@@ -316,18 +327,51 @@ class SwarmObstacleSim:
     def step(self) -> ObstacleFrame:
         """Advance one frame and return serialisable frame data."""
         # Move drones
-        for drone in self.drones:
+        for i, drone in enumerate(self.drones):
             if drone.arrived:
                 continue
+            
+            # Simple reactive collision avoidance (Boids-like separation)
+            repulsion = np.zeros(3)
+            # 1. Dodge other drones
+            for j, other in enumerate(self.drones):
+                if i == j: continue
+                diff = drone.pos - other.pos
+                dist = np.linalg.norm(diff)
+                if dist < 20.0 and dist > 0.1: # 20m safety radius
+                    repulsion += (diff / dist) * (20.0 - dist) * 2.0
+                    
+            # 2. Dodge obstacles
+            for obs in self.obstacles:
+                diff = drone.pos - obs.pos
+                dist = np.linalg.norm(diff)
+                safe_dist = obs.radius + 15.0 # 15m buffer around obstacles
+                if dist < safe_dist:
+                    # Exponential push away so it can never enter
+                    intensity = 5.0 * np.exp(3.0 * (1.0 - (dist / safe_dist)))
+                    repulsion += (diff / (dist + 1e-9)) * intensity
+            
             to_goal = drone.end - drone.pos
             dist    = np.linalg.norm(to_goal)
+            
             if dist <= ARRIVAL_EPS:
                 drone.pos     = drone.end.copy()
                 drone.arrived = True
             else:
-                direction = to_goal / (dist + 1e-9)
-                step_dist = min(drone.speed * self.dt, dist)
-                drone.pos = drone.pos + direction * step_dist
+                # Combine goal direction with repulsion
+                direction = (to_goal / (dist + 1e-9)) * drone.speed
+                velocity = direction + repulsion
+                
+                # Normalize actual step to respect max speed
+                actual_speed = np.linalg.norm(velocity)
+                if actual_speed > 1e-6:
+                    velocity = (velocity / actual_speed) * drone.speed
+                
+                step_dist = min(np.linalg.norm(velocity) * self.dt, dist)
+                if step_dist > 1e-6:
+                    step_dir = velocity / np.linalg.norm(velocity)
+                    drone.pos = drone.pos + step_dir * step_dist
+                
                 drone.pos[0] = np.clip(drone.pos[0], 0.0, self.area_xy)
                 drone.pos[1] = np.clip(drone.pos[1], 0.0, self.area_xy)
                 drone.pos[2] = np.clip(drone.pos[2], self.min_alt, self.max_alt)

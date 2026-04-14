@@ -40,8 +40,8 @@ _TEMPLATE = """<!DOCTYPE html>
 <canvas id="c"></canvas>
 <div id="hud3">connecting…</div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
 
 <script>
 // ── Injected from Python ──────────────────────────────────────────────────────
